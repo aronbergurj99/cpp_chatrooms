@@ -1,5 +1,6 @@
 #include "client.h"
 #include <iostream>
+#include "server.h"
 
 #include "../models/network_data.h"
 
@@ -10,19 +11,18 @@ Client::Client(int port, std::string ip_address) : Socket(port, ip_address) {
     Socket::get_sock(this->client_sock);
     if (!connect_to_server()) exit(1);
 
-    int incoming_len;
     NetworkData data;
-
-    recv(this->client_sock, (char*) &incoming_len, sizeof(int), 0);
-    char * buf = new char[incoming_len];
-
-    recv(this->client_sock, buf, incoming_len, 0);
-    cout << incoming_len << endl;
-
-    data.deserialize(buf);
+    recv_message(data, this->client_sock);
     cout << data.data << endl;
-    delete[] buf;
 
+    data.action = login_cmnd;
+    data.data = "aron bergur";
+    send_message(data, this->client_sock);
+    NetworkData data1;
+    
+    recv_message(data1, this->client_sock);
+    cout <<data1.data<<endl;
+    
 
 }
 

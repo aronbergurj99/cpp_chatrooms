@@ -1,9 +1,28 @@
 #include "server.h"
-#include "../models/network_data.h"
 #include <iostream>
-#include <vector>
+#include <fstream>
 
-using std::vector;
+using namespace std;
+
+struct User {
+    char username[32];
+    char password[32];
+};
+
+bool parse_user(std::string s, User &user) {
+    string uTmp;
+    string pTmp;
+
+    uTmp = s.substr(0, s.find(" "));
+    s.erase(0, s.find(" ") + 1);
+    pTmp = s;
+    if (uTmp.size() <= 32 && pTmp.size() <=32) {
+        strcpy(user.username, uTmp.c_str());
+        strcpy(user.password, pTmp.c_str());
+        return true;
+    }
+    return false;
+}
 
 Server::Server(int port, std::string ip_adress) : Socket(port, ip_adress) {
     Socket::get_sock(this->listening);
@@ -59,21 +78,11 @@ void Server::run(){
                 Server::accept_connection(client);
                 FD_SET(client, &master);
 
-                NetworkData data = {message, "Welcome to cpp chatrooms, please login using command:\n\t-l <username> <password>\0"};
-                char * buf;
-                int len = data.serialize(buf);
-                send(client, (char*) &len, sizeof(int), 0);
-                send(client, buf, len, 0);
-                std::cout << "SEND DATA" << std::endl;
-                delete[] buf;
+                NetworkData data = {message, "\nWelcome to cpp chatrooms, please login/signup using command(no spaces in in password or username):\n-l|-s <username> <password>\0"};
+                send_message(data, client);
             } else {
-                int incoming_bytes;
-                NetworkData incoming_data;
-                int bytes_recv = 0;
-                // int bytes_recv = recv(curr_sock, (char *) &incoming_bytes, sizeof(int), 0);
-                // char * buf = new char[incoming_bytes];
-                // bytes_recv += recv(curr_sock, buf , incoming_bytes, 0);
-                // incoming_data.deserialize(buf);
+                NetworkData data;
+                int bytes_recv = recv_message(data, curr_sock);
                 
                 if (bytes_recv <= 0) {
                     std::cout<< "DISCONNECT" << std::endl;
@@ -82,7 +91,27 @@ void Server::run(){
                     continue;
                 } else {
                     //we got data from socket.
-                    std::cout << incoming_data.data << std::endl;
+                    NetworkData resp;
+                    resp.action = message;
+                    if (!users.count(curr_sock)) {
+                        //if the user is not logged in
+                    
+                        switch (data.action)
+                        {
+                        case login_cmnd:
+
+                            handle_login(data, curr_sock);
+
+                            break;
+                        case signup_cmnd:
+                            handle_signup(data, curr_sock);
+                            break;
+                        default:
+                            resp.data = "You must be logged in!!!";
+                            send_message(resp, curr_sock);
+                        }
+                    }
+
                 }
             
             }
@@ -90,3 +119,79 @@ void Server::run(){
         }
     }
 }
+
+void Server::handle_login(NetworkData &data, SOCKET_TYPE &sock) {
+    fstream db;
+    User user;
+    NetworkData resp = {message, "Loggin in failed, please try again\0"};
+    if (!parse_user(data.data, user)) {
+        send_message(resp, sock);
+        return;
+    }
+    db.open("networking/persistance/users.fic", ios::binary|ios::in|ios::out|ios::app);
+    db.clear();
+    db.seekg(0, ios::beg);
+    User readUser;
+    while(!db.eof()) {
+        db.read((char*) &readUser, sizeof(User));
+        if (strcmp(readUser.username, user.username) == 0 && strcmp(readUser.password, user.password) == 0) {
+            db.close();
+            users[sock] = user.username;
+            resp.data= "Logged in";
+            send_message(resp, sock);
+        }
+    }
+    
+    db.close();
+    send_message(resp, sock);
+
+}
+
+void Server::handle_signup(NetworkData &data, SOCKET_TYPE &sock) {
+    fstream db;
+    User user;
+    NetworkData resp = {message, "\nSignup failed, user exists or password and username is longer then 32chars.\n\0"};
+    if (!parse_user(data.data, user)) {
+        send_message(resp, sock);
+        return;
+    }
+    db.open("networking/persistance/users.fic", ios::binary|ios::in|ios::out|ios::app);
+    db.clear();
+    db.seekg(0, ios::beg);
+    User readUser;
+    while(!db.eof()) {
+        db.read((char*) &readUser, sizeof(User));
+        if (strcmp(readUser.username, user.username) == 0) {
+            db.close();
+            send_message(resp, sock);
+            return;
+        }
+    }
+    // user name is not taken;
+    db.clear();
+    db.seekp(0, ios::end);
+    db.write((char*)&user, sizeof(User));
+    db.close();
+    resp.data = "Signed up and logged in :)\n\0";
+    users[sock] = user.username;
+    send_message(resp, sock);
+}
+
+int recv_message(NetworkData &data, SOCKET_TYPE &sock) {
+    int len;
+    int bytes;
+    bytes = recv(sock, (char*) &len, sizeof(int), 0);
+    char * buf = new char[len];
+    bytes += recv(sock, buf, len, 0);
+    data.deserialize(buf);
+    delete[] buf;
+    return bytes;
+}
+void send_message(NetworkData &data, SOCKET_TYPE &sock) {
+    char * buf;
+    int len = data.serialize(buf);
+    send(sock, (char *) &len, sizeof(int), 0);
+    send(sock, buf, len, 0);
+    delete[] buf;
+}
+
