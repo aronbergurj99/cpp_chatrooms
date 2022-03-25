@@ -1,6 +1,11 @@
 #include "network_data.h"
 #include <string.h>
 
+//testing
+#include <iostream>
+using std::cout;
+using std::endl;
+
 using std::string;
 
 int NetworkData::serialize(char* &buffer) {
@@ -10,6 +15,7 @@ int NetworkData::serialize(char* &buffer) {
     buffer = new char[total_length];
     
     char *ptr = buffer;
+
     *((Actions *)ptr) = action;
     ptr += sizeof(Actions);
 
@@ -22,13 +28,15 @@ int NetworkData::serialize(char* &buffer) {
     return total_length;
 }
 
-void NetworkData::deserialize(char *buffer, int length) {
+void NetworkData::deserialize(char *buffer) {
+    // int len = *((int *)(buffer));
+    // buffer += sizeof(int);
+
     action = *((Actions *)(buffer));
     buffer += sizeof(Actions);
 
     int str_len = *((int *) (buffer));
     buffer += sizeof(int);
-
     string tmp_str;
     for (int i = 0; i < str_len; i++) {
         tmp_str.push_back(*(buffer++));   

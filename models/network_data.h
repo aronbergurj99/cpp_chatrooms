@@ -18,7 +18,7 @@ struct NetworkData {
     Actions action;
     std::string data;
     int serialize(char* &buffer);
-    void deserialize(char *buffer, int length);
+    void deserialize(char *buffer);
 };
 
 #endif //NETWORK_DATA_1231245

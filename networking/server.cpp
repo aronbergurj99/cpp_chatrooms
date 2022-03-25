@@ -1,6 +1,9 @@
 #include "server.h"
+#include "../models/network_data.h"
 #include <iostream>
+#include <vector>
 
+using std::vector;
 
 Server::Server(int port, std::string ip_adress) : Socket(port, ip_adress) {
     Socket::get_sock(this->listening);
@@ -40,5 +43,50 @@ bool Server::accept_connection(SOCKET_TYPE &new_socket) {
 }
 
 void Server::run(){
-    std::cout << "Running\n"; 
+    std::cout << "Running\n";
+    fd_set master;
+    FD_ZERO(&master);
+    FD_SET(this->listening, &master); // add the listening port to the fd_set
+
+    bool running = true;
+    while (running) {
+        fd_set copy = master;
+        int socketCount = select(0, &copy, nullptr, nullptr, nullptr);
+        for (int i =0; i < socketCount; i++) {
+            SOCKET_TYPE curr_sock = copy.fd_array[i];
+            if (curr_sock == this->listening) { // server socket
+                SOCKET_TYPE client;
+                Server::accept_connection(client);
+                FD_SET(client, &master);
+
+                NetworkData data = {message, "Welcome to cpp chatrooms, please login using command:\n\t-l <username> <password>\0"};
+                char * buf;
+                int len = data.serialize(buf);
+                send(client, (char*) &len, sizeof(int), 0);
+                send(client, buf, len, 0);
+                std::cout << "SEND DATA" << std::endl;
+                delete[] buf;
+            } else {
+                int incoming_bytes;
+                NetworkData incoming_data;
+                int bytes_recv = 0;
+                // int bytes_recv = recv(curr_sock, (char *) &incoming_bytes, sizeof(int), 0);
+                // char * buf = new char[incoming_bytes];
+                // bytes_recv += recv(curr_sock, buf , incoming_bytes, 0);
+                // incoming_data.deserialize(buf);
+                
+                if (bytes_recv <= 0) {
+                    std::cout<< "DISCONNECT" << std::endl;
+                    closesocket(curr_sock);
+                    FD_CLR(curr_sock, &master);
+                    continue;
+                } else {
+                    //we got data from socket.
+                    std::cout << incoming_data.data << std::endl;
+                }
+            
+            }
+
+        }
+    }
 }
