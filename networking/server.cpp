@@ -9,10 +9,10 @@ struct User {
     char password[32];
 };
 
-bool parse_user(std::string s, User &user) {
+bool parse_user(std::string ss, User &user) {
+    string s = ss;
     string uTmp;
     string pTmp;
-
     uTmp = s.substr(0, s.find(" "));
     s.erase(0, s.find(" ") + 1);
     pTmp = s;
@@ -110,6 +110,18 @@ void Server::run(){
                             resp.data = "You must be logged in!!!";
                             send_message(resp, curr_sock);
                         }
+                    } else {
+                        //user is logged in
+                        NetworkData resp;
+                        resp.action = message;
+                        switch (data.action) {
+                            case list_cmnd:
+                                break;
+                            default:
+                                resp.data = "Invalid command";
+                                send_message(resp, curr_sock);
+                                break;
+                        }
                     }
 
                 }
@@ -139,6 +151,7 @@ void Server::handle_login(NetworkData &data, SOCKET_TYPE &sock) {
             users[sock] = user.username;
             resp.data= "Logged in";
             send_message(resp, sock);
+            return;
         }
     }
     
