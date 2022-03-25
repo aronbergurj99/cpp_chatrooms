@@ -15,11 +15,18 @@ private:
     bool listen_at_socket();
     bool accept_connection(SOCKET_TYPE &new_socket);
     void run();
-    bool auth(SOCKET_TYPE &sock);
     void handle_login(NetworkData &data, SOCKET_TYPE &sock);
     void handle_signup(NetworkData &data, SOCKET_TYPE &sock);
-    map<SOCKET_TYPE, std::string> users;
+    void handle_create(NetworkData &data, SOCKET_TYPE &sock);
+    void handle_list(NetworkData &data, SOCKET_TYPE &sock);
+    void load_chatrooms();
+    void handle_join(NetworkData &data, SOCKET_TYPE &sock);
+    void handle_msg(NetworkData &data, SOCKET_TYPE &sock);
+    void handle_leave(NetworkData &data, SOCKET_TYPE &sock);
 
+    map<SOCKET_TYPE, std::string> inchatroom;
+    map<SOCKET_TYPE, std::string> users;
+    map<std::string, vector<SOCKET_TYPE>> chatrooms;
     SOCKET_TYPE listening;
 
 public:

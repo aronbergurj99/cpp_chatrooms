@@ -11,6 +11,7 @@ enum Actions {
     create_cmnd,
     join_cmnd,
     quit_cmnd,
+    leave_cmnd,
     message,
 };
 

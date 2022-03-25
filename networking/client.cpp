@@ -15,11 +15,13 @@ bool running = true;
 mutex print_mutex;
 mutex input_mutex;
 
+
+
 bool parse_input(NetworkData &data, string inp) {
     if (inp.size() < 2) {
         return false;
     }
-
+    data.action = message;
     if (inp[0] == '-') {
         //command
 
@@ -28,9 +30,11 @@ bool parse_input(NetworkData &data, string inp) {
         {
         case 'l':
             data.action = login_cmnd;
+            
             break;
         case 's':
             data.action = signup_cmnd;
+        
             break;
         case 'c':
             //create chatroom
@@ -40,11 +44,18 @@ bool parse_input(NetworkData &data, string inp) {
         case 'a':
             //list chatrooms
             data.action = list_cmnd;
+            break;
         case 'j':
             //join chatroom
             data.action = join_cmnd;
+            break;
+        case 'e':
+            //leave chatroom
+            data.action = leave_cmnd;
+            break;
         case 'q':
             running = false;
+            break;
         default:
             //unknown
             return false;
@@ -57,9 +68,9 @@ bool parse_input(NetworkData &data, string inp) {
         data.data = inp;
         return true;
     }
-    inp.erase(0, 3);
+    inp.erase(0,3);
+    
     data.data = inp;
-
     return true;
 }
 
@@ -67,9 +78,9 @@ bool parse_input(NetworkData &data, string inp) {
 void input(SOCKET_TYPE sock) {
     while (running) {
         string inp;
-        input_mutex.lock();
+        // input_mutex.lock();
         getline(cin, inp);
-        input_mutex.unlock();
+        // input_mutex.unlock();
         NetworkData data;
         if (parse_input(data, inp)){
             send_message(data, sock);
@@ -81,9 +92,9 @@ void output(SOCKET_TYPE sock) {
     while(running) {
         NetworkData data;
         recv_message(data, sock);
-        print_mutex.lock();
+        // print_mutex.lock();
         cout << data.data << endl;
-        print_mutex.unlock();
+        // print_mutex.unlock();
     }
 }
 

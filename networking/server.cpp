@@ -1,6 +1,9 @@
 #include "server.h"
 #include <iostream>
 #include <fstream>
+#include <cctype>
+#include <algorithm>
+#include <sstream>
 
 using namespace std;
 
@@ -24,11 +27,25 @@ bool parse_user(std::string ss, User &user) {
     return false;
 }
 
+void Server::load_chatrooms(){
+    fstream db;
+
+    db.open("networking/persistance/chatrooms.fic", ios::binary|ios::in|ios::out|ios::app);
+    db.clear();
+    string tmp;
+    while(!db.eof()) {
+        db >> tmp;
+        chatrooms[tmp] = vector<SOCKET_TYPE>();
+    }
+    db.close();
+}
+
 Server::Server(int port, std::string ip_adress) : Socket(port, ip_adress) {
     Socket::get_sock(this->listening);
     bind_socket_to_address();
     listen_at_socket();
     std::cout << "Server starting" << std::endl;
+    load_chatrooms();
     run();
 }
 
@@ -78,7 +95,7 @@ void Server::run(){
                 Server::accept_connection(client);
                 FD_SET(client, &master);
 
-                NetworkData data = {message, "\nWelcome to cpp chatrooms, please login/signup using command(no spaces in in password or username):\n-l|-s <username> <password>\0"};
+                NetworkData data = {message, "\nWelcome to cpp chatrooms, please login/signup using command(no spaces in in password or username):\n-l|-s <username> <password>\n\n"};
                 send_message(data, client);
             } else {
                 NetworkData data;
@@ -107,7 +124,7 @@ void Server::run(){
                             handle_signup(data, curr_sock);
                             break;
                         default:
-                            resp.data = "You must be logged in!!!";
+                            resp.data = "\nYou are not logged in, use -l or -s <username> <password> to login|signup\n";
                             send_message(resp, curr_sock);
                         }
                     } else {
@@ -116,6 +133,19 @@ void Server::run(){
                         resp.action = message;
                         switch (data.action) {
                             case list_cmnd:
+                                handle_list(data, curr_sock);
+                                break;
+                            case create_cmnd:
+                                handle_create(data, curr_sock);
+                                break;
+                            case join_cmnd:
+                                handle_join(data, curr_sock);
+                                break;
+                            case message:
+                                handle_msg(data, curr_sock);
+                                break;
+                            case leave_cmnd:
+                                handle_leave(data, curr_sock);
                                 break;
                             default:
                                 resp.data = "Invalid command";
@@ -129,6 +159,46 @@ void Server::run(){
             }
 
         }
+    }
+}
+
+void Server::handle_leave(NetworkData &data, SOCKET_TYPE &sock) {
+    if(inchatroom.count(sock)) {
+        //user is in chatroom.
+        ostringstream ss2;
+        ss2 << users[sock] << " left the room";
+        data.data = ss2.str();
+        handle_msg(data, sock);
+        vector<SOCKET_TYPE> &vec = chatrooms[inchatroom[sock]];
+        //remove user from chatroom.
+        vec.erase(std::remove(vec.begin(), vec.end(), sock), vec.end());
+        ostringstream ss;
+        ss << "You left the chatroom: " << inchatroom[sock];
+        data.data = ss.str();
+        inchatroom.erase(sock);
+
+    } else {
+        data.data = "You are not in chatroom.\n\n";
+    }
+    send_message(data, sock);
+}
+
+void Server::handle_msg(NetworkData &data, SOCKET_TYPE &sock) {
+    if(inchatroom.count(sock)) {
+        string chatroom = inchatroom[sock];
+        ostringstream ss;
+        ss << users[sock] << ": " << data.data;
+        data.data = ss.str();
+        for (SOCKET_TYPE tmp : chatrooms[chatroom]) {
+            if (tmp != sock) {
+
+                send_message(data, tmp);
+            }
+        }
+    } else {
+        //user is not in chatroom and cant send msg.
+        data.data = "You are not in chatroom, you can join with -j <chatrom> and -a to see all chatroms\n\n";
+        send_message(data, sock);
     }
 }
 
@@ -149,7 +219,10 @@ void Server::handle_login(NetworkData &data, SOCKET_TYPE &sock) {
         if (strcmp(readUser.username, user.username) == 0 && strcmp(readUser.password, user.password) == 0) {
             db.close();
             users[sock] = user.username;
-            resp.data= "Logged in";
+            ostringstream ss;
+            ss << "\n\nWelcome " << user.username << ", use -a to list chatroom, -c <chatroom> to create and -j <chatroom> to join!\n";
+
+            resp.data= ss.str();
             send_message(resp, sock);
             return;
         }
@@ -157,6 +230,18 @@ void Server::handle_login(NetworkData &data, SOCKET_TYPE &sock) {
     
     db.close();
     send_message(resp, sock);
+
+}
+
+void Server::handle_list(NetworkData &data, SOCKET_TYPE &sock) {
+    data.data ="Chatrooms:";
+    send_message(data, sock);
+    for (auto const& m : chatrooms) {
+        ostringstream ss;
+        ss << "\t" << m.first;
+        data.data = ss.str();
+        send_message(data, sock);
+    }
 
 }
 
@@ -188,6 +273,53 @@ void Server::handle_signup(NetworkData &data, SOCKET_TYPE &sock) {
     resp.data = "Signed up and logged in :)\n\0";
     users[sock] = user.username;
     send_message(resp, sock);
+}
+
+void Server::handle_join(NetworkData &data, SOCKET_TYPE &sock) {
+    string s = data.data;
+    ostringstream ss;
+    if(chatrooms.count(s)) {
+        //chat room exists.
+        ss << "Joining chatroom: " << s; 
+
+        chatrooms[s].push_back(sock);
+        inchatroom[sock] = s;
+        data.data = "Joined.";
+        handle_msg(data, sock);
+        data.data = ss.str();
+    } else {
+        data.data = "Chatroom does not exist. You can create it with -c <chatroom> or see all chatrooms with -a";
+    }
+    send_message(data, sock);
+}
+
+void Server::handle_create(NetworkData &data, SOCKET_TYPE &sock) {
+    fstream db;
+    string s = data.data;
+    NetworkData resp = {message, "Chatroom already exists"};
+    //remove white space;
+    s.erase(std::remove_if(s.begin(), s.end(), ::isspace), s.end());
+    db.open("networking/persistance/chatrooms.fic", ios::binary|ios::in|ios::out|ios::app);
+    s.push_back(' ');
+    db.clear();
+    db.seekg(0, ios::beg);
+    while(!db.eof()) {
+        string tmp;
+        db >> tmp;
+        if (strcmp(tmp.c_str(), s.c_str()) == 0) {
+            db.close();
+            send_message(resp, sock);
+            return;
+        }
+    }
+    db.clear();
+    db.seekp(0, ios::end);
+    db << s;
+    chatrooms[s] = vector<SOCKET_TYPE>();
+    resp.data = "Chatroom created, you can join it";
+    db.close();
+    send_message(resp, sock);
+    return;
 }
 
 int recv_message(NetworkData &data, SOCKET_TYPE &sock) {
