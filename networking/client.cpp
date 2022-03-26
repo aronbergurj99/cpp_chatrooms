@@ -54,6 +54,7 @@ bool parse_input(NetworkData &data, string inp) {
             data.action = leave_cmnd;
             break;
         case 'q':
+            data.action = quit_cmnd;
             running = false;
             break;
         default:

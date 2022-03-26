@@ -23,6 +23,7 @@ private:
     void handle_join(NetworkData &data, SOCKET_TYPE &sock);
     void handle_msg(NetworkData &data, SOCKET_TYPE &sock);
     void handle_leave(NetworkData &data, SOCKET_TYPE &sock);
+    void handle_quit(NetworkData &data, SOCKET_TYPE &sock, fd_set &set);
 
     map<SOCKET_TYPE, std::string> inchatroom;
     map<SOCKET_TYPE, std::string> users;

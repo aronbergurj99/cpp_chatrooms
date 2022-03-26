@@ -102,9 +102,7 @@ void Server::run(){
                 int bytes_recv = recv_message(data, curr_sock);
                 
                 if (bytes_recv <= 0) {
-                    std::cout<< "DISCONNECT" << std::endl;
-                    closesocket(curr_sock);
-                    FD_CLR(curr_sock, &master);
+                    handle_quit(data, curr_sock, master);
                     continue;
                 } else {
                     //we got data from socket.
@@ -122,6 +120,9 @@ void Server::run(){
                             break;
                         case signup_cmnd:
                             handle_signup(data, curr_sock);
+                            break;
+                        case quit_cmnd:
+                            handle_quit(data, curr_sock, master);
                             break;
                         default:
                             resp.data = "\nYou are not logged in, use -l or -s <username> <password> to login|signup\n";
@@ -147,6 +148,9 @@ void Server::run(){
                             case leave_cmnd:
                                 handle_leave(data, curr_sock);
                                 break;
+                            case quit_cmnd:
+                                handle_quit(data, curr_sock, master);
+                                break;
                             default:
                                 resp.data = "Invalid command";
                                 send_message(resp, curr_sock);
@@ -161,6 +165,17 @@ void Server::run(){
         }
     }
 }
+
+void Server::handle_quit(NetworkData &data, SOCKET_TYPE &sock, fd_set &set) {
+    std::cout<< "DISCONNECT" << std::endl;
+    handle_leave(data, sock);
+    if (users.count(sock)) {
+        users.erase(sock);
+    }
+    closesocket(sock);
+    FD_CLR(sock, &set);
+}
+
 
 void Server::handle_leave(NetworkData &data, SOCKET_TYPE &sock) {
     if(inchatroom.count(sock)) {
